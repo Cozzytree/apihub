@@ -1,6 +1,6 @@
 # Simple PopShop configuration example
 - request:
-    path: "/arch"
+    path: "/arch/apple"
     method: "GET"
   proxy:
     url: "https://aur.archlinux.org"

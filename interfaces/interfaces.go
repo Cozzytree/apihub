@@ -2,6 +2,7 @@ package interfaces
 
 import (
 	"net/http"
+	"time"
 )
 
 type ServerConfig struct {
@@ -10,8 +11,9 @@ type ServerConfig struct {
 	Max_request_size     uint
 	Request_timeout_ms   uint64
 	Max_header_size      uint
+	Rate_limit           bool
 	Rate_limit_requests  uint32
-	Rate_limit_window_ms uint64
+	Rate_limit_window_ms time.Duration
 }
 
 type HandlerFn func(writer http.ResponseWriter, request *http.Request)

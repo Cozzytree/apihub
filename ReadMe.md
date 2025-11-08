@@ -19,21 +19,21 @@ It’s designed for quick testing, simulating APIs, or routing requests without 
 ## Installation
 
 ```bash
-git clone https://github.com/<your-username>/apihub.git
+git clone https://github.com/Cozzycode/apihub.git
 cd apihub
 go build -o apihub
 ```
 ## or
 ```bash
-go install github.com/<your-username>/apihub@latest
+go install github.com/Cozzycode/apihub@latest
 ```
-[Examples Folder](https://github.com/cozzytree/apihub/examples)
+[Example Config](https://github.com/Cozzytree/apihub/tree/main/examples)
 
 ## Usage
 ```bash
 apihub [options]
 
 Commands:
-  serve -f [config file] -p [port] -w [watch config file] --max-request-size [bytes]
+  serve -f [config file/folder] -p [port] -w [watch config file] --max-request-size [bytes] --request-timeout [20(ms|m|s)]
   version
   validate

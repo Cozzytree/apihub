@@ -4,13 +4,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"strings"
 
 	"github.com/Cozzytree/apihub/config"
 	"github.com/Cozzytree/apihub/interfaces"
+	"github.com/Cozzytree/apihub/middleware"
 )
 
 type RuleHeaderNotMatched struct {
@@ -140,12 +140,16 @@ func (a *Api) Start(server_config interfaces.ServerConfig) error {
 	// a.server.AddRoute(interfaces.HEAD, "/*", a.handleRequest)
 	// a.server.AddRoute(interfaces.OPTIONS, "/*", a.handleRequest)
 
-	a.server.AddMiddleware(func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			log.Printf("%s %s\n", r.Method, r.URL.Path)
-			next.ServeHTTP(w, r)
-		})
-	})
+	a.server.AddMiddleware(middleware.Logger)
+
+	// rate limiter
+	if server_config.Rate_limit {
+		limiter := middleware.NewRateLimiter(
+			server_config.Rate_limit_window_ms,
+			uint(server_config.Rate_limit_requests),
+		)
+		a.server.AddMiddleware(limiter.RateLimitMiddleware)
+	}
 
 	return a.server.Start(server_config)
 }
@@ -176,7 +180,6 @@ func (a *Api) handleRequest(w http.ResponseWriter, r *http.Request) {
 
 func (a *Api) serveMockRequest(w http.ResponseWriter, rule *config.Rule) {
 	response := rule.Response
-	fmt.Printf("Serving mock request: %d\n", response.Status)
 	w.WriteHeader(int(response.Status))
 	for key, val := range response.Headers {
 		if strVal, ok := val.(string); ok {

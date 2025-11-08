@@ -17,11 +17,17 @@ import (
 	"github.com/fsnotify/fsnotify"
 )
 
+const version = "0.1.0"
+const DEFAULT_RATELIMITER_LIMIT = 10
+const DEFAULT_RATELIMITER_WINDOW = 10 * time.Second
+
 type ServeConfig struct {
 	host             string
 	port             uint16
 	watch            bool
 	max_request_size uint
+	request_timeout  time.Duration
+	rate_limiter     bool
 }
 
 type CLI struct {
@@ -44,7 +50,9 @@ func (c *CLI) Run(args []string) error {
 	case "validate":
 
 	case "version":
-
+		fmt.Println(version)
+	case "-h", "--help":
+		c.printUsage()
 	default:
 		fmt.Println("Unknown command")
 		c.printUsage()
@@ -84,6 +92,22 @@ func (c *CLI) runServeCmd(args []string) {
 		case "--watch", "-w":
 			serve_conf.watch = true
 			i += 1
+		case "-rl":
+			serve_conf.rate_limiter = true
+			i += 1
+		case "--request-timeout":
+			if i+1 >= uint(len(args)) {
+				fmt.Println("--max-request-size requires a value")
+				os.Exit(1)
+			}
+			timeoutStr := args[i+1]
+			duration, err := time.ParseDuration(timeoutStr)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "invalid request timeout format %q (use values like 30s, 500ms, 2m)\n", timeoutStr)
+				os.Exit(1)
+			}
+			serve_conf.request_timeout = duration
+			i += 2
 		case "--max-request-size":
 			if i+1 >= uint(len(args)) {
 				fmt.Println("--max-request-size requires a value")
@@ -120,6 +144,9 @@ func (c *CLI) startServer(config_path string, serve_config ServeConfig) {
 	log.Printf("Config file %s", config_path)
 	log.Printf("Host: %s", serve_config.host)
 	log.Printf("Port: %d", serve_config.port)
+	if serve_config.rate_limiter {
+		log.Println("Limiter Enabled")
+	}
 
 	app_conf, err := config.LoadFromFile(config_path)
 	if err != nil {
@@ -131,10 +158,18 @@ func (c *CLI) startServer(config_path string, serve_config ServeConfig) {
 
 	app_shop := app.Init(httpSrv, *app_conf)
 
+	if serve_config.request_timeout == 0 {
+		serve_config.request_timeout = 30 * time.Second
+	}
+
 	server_config := interfaces.ServerConfig{
-		Host:             serve_config.host,
-		Port:             serve_config.port,
-		Max_request_size: serve_config.max_request_size,
+		Host:                 serve_config.host,
+		Port:                 serve_config.port,
+		Max_request_size:     serve_config.max_request_size,
+		Request_timeout_ms:   uint64(serve_config.request_timeout.Milliseconds()),
+		Rate_limit:           serve_config.rate_limiter,
+		Rate_limit_requests:  DEFAULT_RATELIMITER_LIMIT,
+		Rate_limit_window_ms: DEFAULT_RATELIMITER_WINDOW,
 	}
 
 	startServer := func() {
@@ -218,4 +253,7 @@ func (c CLI) printUsage() {
 	fmt.Println("Usage:")
 	fmt.Println("Commands")
 	fmt.Println(" serve [config.yaml] start the HTTP server")
+	fmt.Println("  -p port -w(watch config file) --max-request-size bytes")
+	fmt.Println(" version")
+	fmt.Println(" -h or --help")
 }

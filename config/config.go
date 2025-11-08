@@ -1,7 +1,7 @@
 package config
 
 import (
-	"errors"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,29 +11,29 @@ import (
 )
 
 type RequestRule struct {
-	Path    string         `yaml:"path"`
-	Method  string         `yaml:"method"`
-	Headers map[string]any `yaml:"headers"`
-	Body    string         `yaml:"body"`
+	Path    string         `yaml:"path" json:"path"`
+	Method  string         `yaml:"method" json:"method"`
+	Headers map[string]any `yaml:"headers" json:"headers"`
+	Body    string         `yaml:"body" json:"body"`
 	Params  map[string]string
 }
 
 type MockResponse struct {
-	Status  uint16         `yaml:"status"`
-	Headers map[string]any `yaml:"headers"`
-	Body    string         `yaml:"body"`
+	Status  uint16         `yaml:"status" json:"status"`
+	Headers map[string]any `yaml:"headers" json:"headers"`
+	Body    string         `yaml:"body" json:"body"`
 }
 
 type ProxyConfig struct {
-	Url       string            `yaml:"url"`
-	Headers   map[string]string `yaml:"headers"`
-	TimeoutMs uint64            `yaml:"timeout"`
+	Url       string            `yaml:"url" json:"url"`
+	Headers   map[string]string `yaml:"headers" json:"headers"`
+	TimeoutMs uint64            `yaml:"timeout" json:"timeout"`
 }
 
 type Rule struct {
-	Request  *RequestRule  `yaml:"request"`
-	Response *MockResponse `yaml:"response"`
-	Proxy    *ProxyConfig  `yaml:"proxy"`
+	Request  *RequestRule  `yaml:"request" json:"request"`
+	Response *MockResponse `yaml:"response" json:"response"`
+	Proxy    *ProxyConfig  `yaml:"proxy" json:"proxy"`
 }
 
 func (r Rule) IsProxyStatic() bool {
@@ -68,6 +68,40 @@ type Config struct {
 	Rules []Rule
 }
 
+func loadFromDirectory(dirPath string) (*Config, error) {
+	entries, err := os.ReadDir(dirPath)
+	if err != nil {
+		return nil, err
+	}
+
+	config := &Config{}
+
+	for _, entry := range entries {
+		stat, err := entry.Info()
+		if err != nil {
+			return nil, err
+		}
+		if stat.IsDir() {
+			continue
+		}
+		ext := filepath.Ext(filepath.Join(dirPath, entry.Name()))
+		if ext != ".yml" && ext != ".yaml" && ext != ".json" {
+			continue
+		}
+
+		conf, err := loadSingleFile(filepath.Join(dirPath, entry.Name()))
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "failed to parse %s/%s: %v", dirPath, entry.Name(), err)
+			continue
+		}
+		for _, c := range conf.Rules {
+			config.Rules = append(config.Rules, c)
+		}
+	}
+
+	return config, nil
+}
+
 func loadSingleFile(path string) (*Config, error) {
 	file, err := os.Open(path)
 	if err != nil {
@@ -75,16 +109,25 @@ func loadSingleFile(path string) (*Config, error) {
 	}
 	defer file.Close()
 
+	ext := filepath.Ext(path)
 	var rules []Rule
 
-	decoder := yaml.NewDecoder(file)
-	if err := decoder.Decode(&rules); err != nil {
-		return nil, err
+	var decodeErr error
+
+	switch ext {
+	case ".yaml", ".yml":
+		decodeErr = yaml.NewDecoder(file).Decode(&rules)
+	case ".json":
+		decodeErr = json.NewDecoder(file).Decode(&rules)
+	default:
+		return nil, fmt.Errorf("unsupported file extension: %s", ext)
 	}
 
-	return &Config{
-		Rules: rules,
-	}, nil
+	if decodeErr != nil {
+		return nil, fmt.Errorf("Failed to decode %q: %w", path, err)
+	}
+
+	return &Config{Rules: rules}, nil
 }
 
 func LoadFromFile(path string) (*Config, error) {
@@ -103,13 +146,10 @@ func LoadFromFile(path string) (*Config, error) {
 	stat, err := file.Stat()
 	if err != nil {
 		return nil, fmt.Errorf("error getting file info: %v", err)
-
 	}
 	if stat.IsDir() {
-
+		return loadFromDirectory(fullPath)
 	} else {
 		return loadSingleFile(fullPath)
 	}
-
-	return nil, errors.New("invalid path")
 }
