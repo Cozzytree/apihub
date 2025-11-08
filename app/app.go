@@ -9,8 +9,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/Cozzytree/apishop/config"
-	"github.com/Cozzytree/apishop/interfaces"
+	"github.com/Cozzytree/apihub/config"
+	"github.com/Cozzytree/apihub/interfaces"
 )
 
 type RuleHeaderNotMatched struct {
@@ -219,7 +219,7 @@ func (a *Api) serveProxyRequest(w http.ResponseWriter, r *http.Request, rule *co
 		proxyReq.Header.Set(key, values)
 	}
 
-	proxyReq.Header.Set("X-Forwarded-By", "apishop")
+	proxyReq.Header.Set("X-Forwarded-By", "apihub")
 	client := &http.Client{}
 
 	res, err := client.Do(proxyReq)

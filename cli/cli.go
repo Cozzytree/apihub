@@ -10,10 +10,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Cozzytree/apishop/app"
-	"github.com/Cozzytree/apishop/config"
-	httpserver "github.com/Cozzytree/apishop/http_server"
-	"github.com/Cozzytree/apishop/interfaces"
+	"github.com/Cozzytree/apihub/app"
+	"github.com/Cozzytree/apihub/config"
+	httpserver "github.com/Cozzytree/apihub/http_server"
+	"github.com/Cozzytree/apihub/interfaces"
 	"github.com/fsnotify/fsnotify"
 )
 

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Cozzytree/apishop/interfaces"
+	"github.com/Cozzytree/apihub/interfaces"
 )
 
 type route struct {

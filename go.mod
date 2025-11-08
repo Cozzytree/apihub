@@ -1,4 +1,4 @@
-module github.com/Cozzytree/apishop
+module github.com/Cozzytree/apihub
 
 go 1.25.3
 
