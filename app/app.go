@@ -2,8 +2,10 @@ package app
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/Cozzytree/apishop/config"
@@ -71,6 +73,7 @@ func (m matcher) matchPath(request *http.Request, rule *config.Rule) bool {
 		}
 	}
 
+	rule.Request.Params = extractParams(rulePath, reqPath)
 	return true
 }
 
@@ -138,7 +141,7 @@ func (a *Api) handleRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if matching_rule.IsProxy() {
-		a.serveProxyRequest(r, matching_rule)
+		a.serveProxyRequest(w, r, matching_rule)
 		return
 	}
 }
@@ -158,10 +161,76 @@ func (a *Api) serveMockRequest(w http.ResponseWriter, rule *config.Rule) {
 	w.Write([]byte(response.Body))
 }
 
-func (a *Api) serveProxyRequest(r *http.Request, rule *config.Rule) {
-	client := http.Client{}
-	switch r.Method {
-	case http.MethodGet:
-		client.Get(rule.Proxy.Url)
+func (a *Api) serveProxyRequest(w http.ResponseWriter, r *http.Request, rule *config.Rule) {
+	target := rule.Proxy.Url
+
+	// Replace path parameters
+	if !rule.IsProxyStatic() && len(rule.Request.Params) > 0 {
+		target = substituteProxyParams(target, rule.Request.Params)
 	}
+
+	proxyUrl, err := url.Parse(target)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("invalid proxy target: %v", err), http.StatusBadGateway)
+		return
+	}
+
+	proxyReq, err := http.NewRequestWithContext(r.Context(), r.Method, proxyUrl.String(), r.Body)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("failed to create proxy request: %v", err), http.StatusInternalServerError)
+		return
+	}
+	proxyReq.Header = make(http.Header)
+	for key, values := range r.Header {
+		for _, v := range values {
+			proxyReq.Header.Add(key, v)
+		}
+	}
+
+	for key, values := range rule.Proxy.Headers {
+		proxyReq.Header.Set(key, values)
+	}
+
+	proxyReq.Header.Set("X-Forwarded-By", "apishop")
+	client := &http.Client{}
+
+	res, err := client.Do(proxyReq)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("proxy error: %v", err), http.StatusBadGateway)
+		return
+	}
+	defer res.Body.Close()
+
+	w.WriteHeader(res.StatusCode)
+
+	for key, values := range res.Header {
+		for _, v := range values {
+			r.Header.Set(key, v)
+		}
+	}
+
+	if _, err := io.Copy(w, res.Body); err != nil {
+		fmt.Printf("error copying proxy response: %v\n", err)
+	}
+}
+
+func substituteProxyParams(template string, params map[string]string) string {
+	for key, val := range params {
+		placeholder := ":" + key
+		template = strings.ReplaceAll(template, placeholder, val)
+	}
+	return template
+}
+
+func extractParams(rulePath, reqPath string) map[string]string {
+	ruleParts := strings.Split(strings.Trim(rulePath, "/"), "/")
+	reqParts := strings.Split(strings.Trim(reqPath, "/"), "/")
+	params := make(map[string]string)
+
+	for i, rulePart := range ruleParts {
+		if strings.HasPrefix(rulePart, ":") && i < len(reqParts) {
+			params[rulePart[1:]] = reqParts[i]
+		}
+	}
+	return params
 }

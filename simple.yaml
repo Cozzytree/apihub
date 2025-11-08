@@ -16,3 +16,8 @@
   response:
     body: '{"id": 1, "name": "Brad"}'
     status: 200
+- request:
+    path: "/proxy/google/:id"
+    method: "GET"
+  proxy:
+    url: "https://jsonplaceholder.typicode.com/todos/:id"

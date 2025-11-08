@@ -15,6 +15,7 @@ type RequestRule struct {
 	Method  string         `yaml:"method"`
 	Headers map[string]any `yaml:"headers"`
 	Body    string         `yaml:"body"`
+	Params  map[string]string
 }
 
 type MockResponse struct {
@@ -24,15 +25,25 @@ type MockResponse struct {
 }
 
 type ProxyConfig struct {
-	Url       string         `yaml:"url"`
-	Headers   map[string]any `yaml:"headers"`
-	TimeoutMs uint64         `yaml:"timeout"`
+	Url       string            `yaml:"url"`
+	Headers   map[string]string `yaml:"headers"`
+	TimeoutMs uint64            `yaml:"timeout"`
 }
 
 type Rule struct {
 	Request  *RequestRule  `yaml:"request"`
 	Response *MockResponse `yaml:"response"`
 	Proxy    *ProxyConfig  `yaml:"proxy"`
+}
+
+func (r Rule) IsProxyStatic() bool {
+	paths := strings.SplitSeq(r.Proxy.Url, "/")
+	for p := range paths {
+		if strings.HasPrefix(p, ":") {
+			return false
+		}
+	}
+	return true
 }
 
 func (r Rule) IsStatic() bool {
