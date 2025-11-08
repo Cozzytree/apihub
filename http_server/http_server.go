@@ -1,6 +1,7 @@
 package httpserver
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -19,6 +20,7 @@ type HttpServer struct {
 	Config      interfaces.ServerConfig
 	Routes      []route
 	Middlewares []interfaces.MiddlewareFn
+	server      *http.Server
 }
 
 func CreateHttpServer() *HttpServer {
@@ -38,6 +40,16 @@ func (h *HttpServer) AddMiddleware(middleware interfaces.MiddlewareFn) {
 }
 
 func (h *HttpServer) Stop() error {
+	fmt.Println("Shutting down server...")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := h.server.Shutdown(ctx); err != nil {
+		return fmt.Errorf("shutdown failed: %w", err)
+	}
+
+	fmt.Println("Shutdown complete.")
 	return nil
 }
 
@@ -50,6 +62,7 @@ func chainMiddlewares(h http.Handler, middlewares ...interfaces.MiddlewareFn) ht
 
 func (h *HttpServer) Start(config interfaces.ServerConfig) error {
 	mux := &http.ServeMux{}
+	fmt.Println("Routes:")
 	for _, r := range h.Routes {
 		var modifiedPath string
 		reqPath := strings.SplitSeq(r.path, "/")
@@ -64,9 +77,9 @@ func (h *HttpServer) Start(config interfaces.ServerConfig) error {
 		path := fmt.Sprintf("%s %s", r.method, modifiedPath)
 		if newPath, ok := strings.CutSuffix(path, "/"); ok {
 			mux.HandleFunc(newPath, r.handler)
-			fmt.Println(newPath)
+			fmt.Println(" ", newPath)
 		} else {
-			fmt.Println(modifiedPath)
+			fmt.Println(" ", modifiedPath)
 			mux.HandleFunc(modifiedPath, r.handler)
 		}
 	}
@@ -80,5 +93,8 @@ func (h *HttpServer) Start(config interfaces.ServerConfig) error {
 		WriteTimeout:   time.Duration(config.Request_timeout_ms) * time.Millisecond,
 	}
 
+	if h.server == nil {
+		h.server = s
+	}
 	return s.ListenAndServe()
 }

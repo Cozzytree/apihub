@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -12,33 +13,56 @@ import (
 	"github.com/Cozzytree/apishop/interfaces"
 )
 
+type RuleHeaderNotMatched struct {
+}
+
+func (r RuleHeaderNotMatched) Error() string {
+	return "Header not matched"
+}
+
 type matcher struct {
 }
 
-func (m *matcher) findMatchingRule(request *http.Request, rule []config.Rule) *config.Rule {
-	for _, r := range rule {
-		if m.doesRuleMatch(request, &r) {
-			return &r
+func (m *matcher) findMatchingRule(request *http.Request, rules []config.Rule) (*config.Rule, error) {
+	var errs []error
+
+	for _, r := range rules {
+		if ok, err := m.doesRuleMatch(request, &r); ok {
+			// Found a matching rule, return immediately
+			return &r, nil
+		} else if err != nil {
+			// Collect errors for debugging/logging
+			errs = append(errs, fmt.Errorf("rule %q: %w", r.Request.Path, err))
 		}
 	}
 
-	return nil
+	// No matching rule found, return all errors
+	if len(errs) > 0 {
+		combined := "No matching rule found:\n"
+		for _, e := range errs {
+			combined += "- " + e.Error() + "\n"
+		}
+		return nil, errors.New(combined)
+	}
+
+	// No rules at all
+	return nil, errors.New("no rules configured")
 }
 
-func (m *matcher) doesRuleMatch(request *http.Request, rule *config.Rule) bool {
+func (m *matcher) doesRuleMatch(request *http.Request, rule *config.Rule) (bool, error) {
 	if !m.matchMethod(request, rule) {
-		return false
+		return false, errors.New("Method not matched")
 	}
 
 	if !m.matchPath(request, rule) {
-		return false
+		return false, errors.New("Path not matched")
 	}
 
 	if !m.matchHeaders(request, rule) {
-		return false
+		return false, RuleHeaderNotMatched{}
 	}
 
-	return true
+	return true, nil
 }
 
 func (m matcher) matchMethod(request *http.Request, rule *config.Rule) bool {
@@ -126,10 +150,14 @@ func (a *Api) Start(server_config interfaces.ServerConfig) error {
 	return a.server.Start(server_config)
 }
 
+func (a *Api) Stop() error {
+	return a.server.Stop()
+}
+
 func (a *Api) handleRequest(w http.ResponseWriter, r *http.Request) {
-	matching_rule := a.matcher.findMatchingRule(r, a.config.Rules)
+	matching_rule, err := a.matcher.findMatchingRule(r, a.config.Rules)
 	if matching_rule == nil {
-		fmt.Printf("No matching rule found for Method: %s, Path: %s\n", r.Method, r.URL.Path)
+		fmt.Printf("No matching rule found for Method: %s, Path: %s, err: %v\n", r.Method, r.URL.Path, err)
 		w.WriteHeader(http.StatusNotFound)
 		w.Write([]byte("No matching rule found"))
 		return
@@ -148,7 +176,7 @@ func (a *Api) handleRequest(w http.ResponseWriter, r *http.Request) {
 
 func (a *Api) serveMockRequest(w http.ResponseWriter, rule *config.Rule) {
 	response := rule.Response
-	fmt.Printf("Serving mock response: %d\n", response.Status)
+	fmt.Printf("Serving mock request: %d\n", response.Status)
 	w.WriteHeader(int(response.Status))
 	for key, val := range response.Headers {
 		if strVal, ok := val.(string); ok {

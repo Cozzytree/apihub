@@ -5,12 +5,16 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
 	"strconv"
+	"syscall"
+	"time"
 
 	"github.com/Cozzytree/apishop/app"
 	"github.com/Cozzytree/apishop/config"
 	httpserver "github.com/Cozzytree/apishop/http_server"
 	"github.com/Cozzytree/apishop/interfaces"
+	"github.com/fsnotify/fsnotify"
 )
 
 type ServeConfig struct {
@@ -133,9 +137,79 @@ func (c *CLI) startServer(config_path string, serve_config ServeConfig) {
 		Max_request_size: serve_config.max_request_size,
 	}
 
-	fmt.Printf("Server started in port %d\n", server_config.Port)
-	if err := app_shop.Start(server_config); err != nil {
-		fmt.Printf("err: %v", err)
+	startServer := func() {
+		go func() {
+			fmt.Printf("Server started in port %d\n", server_config.Port)
+			if err := app_shop.Start(server_config); err != nil {
+				fmt.Printf("err: %v\n", err)
+			}
+		}()
+	}
+	startServer()
+
+	// file watcher
+	if serve_config.watch {
+		log.Printf("Watching: %s", config_path)
+		watcher, err := fsnotify.NewWatcher()
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer watcher.Close()
+
+		if err := watcher.Add(config_path); err != nil {
+			log.Fatalf("Error watching file: %v", err)
+		}
+
+		go func() {
+			debounce := time.Now()
+			for {
+				select {
+				case event, ok := <-watcher.Events:
+					if !ok {
+						return
+					}
+					if time.Since(debounce) < 500*time.Millisecond {
+						continue
+					}
+					debounce = time.Now()
+
+					if event.Op&(fsnotify.Write) != 0 {
+						// Clear terminal
+						fmt.Print("\033[H\033[2J")
+
+						log.Println("Config file modified — reloading server...")
+
+						// reload config and server
+						if err := app_shop.Stop(); err != nil {
+							log.Printf("Error stopping server: %v", err)
+						}
+
+						newconf, err := config.LoadFromFile(config_path)
+						if err != nil {
+							log.Printf("Error reloading config: %v", err)
+							continue
+						}
+
+						httpSrv = httpserver.CreateHttpServer()
+						app_shop = app.Init(httpSrv, *newconf)
+						startServer()
+					}
+				case err, ok := <-watcher.Errors:
+					if !ok {
+						return
+					}
+					fmt.Println("error", err)
+				}
+			}
+		}()
+	}
+
+	done := make(chan os.Signal, 1)
+	signal.Notify(done, os.Interrupt, syscall.SIGTERM)
+
+	<-done
+	if err := app_shop.Stop(); err != nil {
+		fmt.Printf("Error during shutdown: %v\n", err)
 		os.Exit(1)
 	}
 }
