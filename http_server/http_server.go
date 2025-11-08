@@ -2,9 +2,14 @@ package httpserver
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log"
 	"net/http"
+	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/Cozzytree/apihub/interfaces"
@@ -21,6 +26,7 @@ type HttpServer struct {
 	Routes      []route
 	Middlewares []interfaces.MiddlewareFn
 	server      *http.Server
+	serverCtx   context.Context
 }
 
 func CreateHttpServer() *HttpServer {
@@ -39,18 +45,8 @@ func (h *HttpServer) AddMiddleware(middleware interfaces.MiddlewareFn) {
 	h.Middlewares = append(h.Middlewares, middleware)
 }
 
-func (h *HttpServer) Stop() error {
-	fmt.Println("Shutting down server...")
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	if err := h.server.Shutdown(ctx); err != nil {
-		return fmt.Errorf("shutdown failed: %w", err)
-	}
-
-	fmt.Println("Shutdown complete.")
-	return nil
+func (h *HttpServer) Stop() {
+	h.serverCtx.Done()
 }
 
 func chainMiddlewares(h http.Handler, middlewares ...interfaces.MiddlewareFn) http.Handler {
@@ -58,6 +54,45 @@ func chainMiddlewares(h http.Handler, middlewares ...interfaces.MiddlewareFn) ht
 		h = middlewares[i](h)
 	}
 	return h
+}
+
+func runServer(ctx context.Context, s *http.Server, shutdownTimeout time.Duration) error {
+	serverErrCh := make(chan error, 1)
+
+	go func() {
+		log.Println("Server starting")
+		if err := s.ListenAndServe(); errors.Is(err, http.ErrServerClosed) {
+			serverErrCh <- err
+		}
+		close(serverErrCh)
+	}()
+
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+
+	select {
+	case err := <-serverErrCh:
+		return err
+	case <-stop:
+		log.Println("Shutdown Signal recieved")
+	case <-ctx.Done():
+		log.Println("Context cancelled")
+	}
+
+	shutdownCtx, cancel := context.WithTimeout(
+		context.Background(),
+		shutdownTimeout,
+	)
+	defer cancel()
+	if err := s.Shutdown(shutdownCtx); err != nil {
+		if closErr := s.Close(); closErr != nil {
+			return errors.Join(closErr, err)
+		}
+		return err
+	}
+
+	log.Println("server closed")
+	return nil
 }
 
 func (h *HttpServer) Start(config interfaces.ServerConfig) error {
@@ -95,6 +130,7 @@ func (h *HttpServer) Start(config interfaces.ServerConfig) error {
 
 	if h.server == nil {
 		h.server = s
+		h.serverCtx = context.Background()
 	}
-	return s.ListenAndServe()
+	return runServer(h.serverCtx, s, 5*time.Second)
 }

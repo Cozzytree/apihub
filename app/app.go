@@ -154,8 +154,8 @@ func (a *Api) Start(server_config interfaces.ServerConfig) error {
 	return a.server.Start(server_config)
 }
 
-func (a *Api) Stop() error {
-	return a.server.Stop()
+func (a *Api) Stop() {
+	a.server.Stop()
 }
 
 func (a *Api) handleRequest(w http.ResponseWriter, r *http.Request) {

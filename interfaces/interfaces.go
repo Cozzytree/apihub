@@ -22,7 +22,7 @@ type MiddlewareFn func(next http.Handler) http.Handler
 
 type Server interface {
 	Start(config ServerConfig) error
-	Stop() error
+	Stop()
 	AddRoute(method string, path string, handler HandlerFn)
 	AddMiddleware(middleware MiddlewareFn)
 }

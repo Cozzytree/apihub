@@ -5,9 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/signal"
 	"strconv"
-	"syscall"
 	"time"
 
 	"github.com/Cozzytree/apihub/app"
@@ -173,15 +171,10 @@ func (c *CLI) startServer(config_path string, serve_config ServeConfig) {
 	}
 
 	startServer := func() {
-		go func() {
-			fmt.Printf("Server started in port %d\n", server_config.Port)
-			if err := app_shop.Start(server_config); err != nil {
-				fmt.Printf("err: %v\n", err)
-			}
-		}()
+		if err := app_shop.Start(server_config); err != nil {
+			fmt.Printf("err: %v\n", err)
+		}
 	}
-	startServer()
-
 	// file watcher
 	if serve_config.watch {
 		log.Printf("Watching: %s", config_path)
@@ -215,9 +208,7 @@ func (c *CLI) startServer(config_path string, serve_config ServeConfig) {
 						log.Println("Config file modified — reloading server...")
 
 						// reload config and server
-						if err := app_shop.Stop(); err != nil {
-							log.Printf("Error stopping server: %v", err)
-						}
+						app_shop.Stop()
 
 						newconf, err := config.LoadFromFile(config_path)
 						if err != nil {
@@ -239,14 +230,16 @@ func (c *CLI) startServer(config_path string, serve_config ServeConfig) {
 		}()
 	}
 
-	done := make(chan os.Signal, 1)
-	signal.Notify(done, os.Interrupt, syscall.SIGTERM)
+	startServer()
 
-	<-done
-	if err := app_shop.Stop(); err != nil {
-		fmt.Printf("Error during shutdown: %v\n", err)
-		os.Exit(1)
-	}
+	// done := make(chan os.Signal, 1)
+	// signal.Notify(done, os.Interrupt, syscall.SIGTERM)
+
+	// <-done
+	// if err := app_shop.Stop(); err != nil {
+	// 	fmt.Printf("Error during shutdown: %v\n", err)
+	// 	os.Exit(1)
+	// }
 }
 
 func (c CLI) printUsage() {
