@@ -97,6 +97,7 @@ func runServer(ctx context.Context, s *http.Server, shutdownTimeout time.Duratio
 
 func (h *HttpServer) Start(config interfaces.ServerConfig) error {
 	mux := &http.ServeMux{}
+
 	fmt.Println("Routes:")
 	for _, r := range h.Routes {
 		var modifiedPath string
@@ -118,6 +119,7 @@ func (h *HttpServer) Start(config interfaces.ServerConfig) error {
 			mux.HandleFunc(modifiedPath, r.handler)
 		}
 	}
+
 	handler := chainMiddlewares(mux, h.Middlewares...)
 
 	s := &http.Server{

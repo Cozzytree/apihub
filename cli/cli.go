@@ -15,7 +15,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 )
 
-const version = "0.1.0"
+const version = "0.1.1"
 const DEFAULT_RATELIMITER_LIMIT = 10
 const DEFAULT_RATELIMITER_WINDOW = 10 * time.Second
 
@@ -160,14 +160,24 @@ func (c *CLI) startServer(config_path string, serve_config ServeConfig) {
 		serve_config.request_timeout = 30 * time.Second
 	}
 
+	rateLimit, err := strconv.Atoi(os.Getenv("APIHUB_RATELIMIT"))
+	if err != nil {
+		rateLimit = DEFAULT_RATELIMITER_LIMIT
+	}
+
+	rateLimitWindow, err := time.ParseDuration(os.Getenv("APIHUB_RATEWINDOW"))
+	if err != nil {
+		rateLimitWindow = DEFAULT_RATELIMITER_WINDOW
+	}
+
 	server_config := interfaces.ServerConfig{
 		Host:                 serve_config.host,
 		Port:                 serve_config.port,
 		Max_request_size:     serve_config.max_request_size,
 		Request_timeout_ms:   uint64(serve_config.request_timeout.Milliseconds()),
 		Rate_limit:           serve_config.rate_limiter,
-		Rate_limit_requests:  DEFAULT_RATELIMITER_LIMIT,
-		Rate_limit_window_ms: DEFAULT_RATELIMITER_WINDOW,
+		Rate_limit_requests:  uint32(rateLimit),
+		Rate_limit_window_ms: rateLimitWindow,
 	}
 
 	startServer := func() {
