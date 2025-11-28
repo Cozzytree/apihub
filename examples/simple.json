@@ -1,49 +1,12 @@
 [
   {
     "request": {
-      "path": "/arch/apple",
-      "method": "GET"
-    },
-    "proxy": {
-      "url": "https://aur.archlinux.org"
-    }
-  },
-  {
-    "request": {
-      "path": "/api/health",
-      "method": "GET"
-    },
-    "proxy": {
-      "url": "https://jsonplaceholder.typicode.com/posts"
-    }
-  },
-  {
-    "request": {
-      "path": "/users/:id/apple",
+      "path": "/requests",
       "method": "GET"
     },
     "response": {
-      "body": "{\"id\": 1, \"name\": \"Brad\"}",
+      "body": "[]",
       "status": 200
-    }
-  },
-  {
-    "request": {
-      "path": "/proxy/google/:id",
-      "method": "GET"
-    },
-    "proxy": {
-      "url": "https://jsonplaceholder.typicode.com/todos/:id"
-    }
-  },
-  {
-    "request": {
-      "path": "/help",
-      "method": "GET"
-    },
-    "response": {
-      "status": 200,
-      "body": "{\"status\": \"ok\", \"name\": \"cozzytree\", \"number\": 1}"
     }
   }
 ]

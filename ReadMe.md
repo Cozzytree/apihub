@@ -25,7 +25,7 @@ go build -o apihub
 ```
 ## or
 ```bash
-go install github.com/Cozzycode/apihub@latest
+go install github.com/Cozzytree/apihub@main
 ```
 [Example Config](https://github.com/Cozzytree/apihub/tree/main/examples)
 

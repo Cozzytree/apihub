@@ -124,7 +124,7 @@ func loadSingleFile(path string) (*Config, error) {
 	}
 
 	if decodeErr != nil {
-		return nil, fmt.Errorf("Failed to decode %q: %w", path, err)
+		return nil, fmt.Errorf("failed to decode %q: %s", path, decodeErr.Error())
 	}
 
 	return &Config{Rules: rules}, nil
